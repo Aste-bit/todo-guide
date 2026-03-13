@@ -1,0 +1,709 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Todoアプリの仕組み — 第二の脳</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Hiragino Kaku Gothic ProN', 'Noto Sans JP', sans-serif;
+    background: #fafafa;
+    color: #202020;
+    min-height: 100vh;
+    font-size: 14px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* ===== Header ===== */
+  .header {
+    background: #fff;
+    padding: 20px 24px 0;
+    position: sticky; top: 0; z-index: 100;
+    border-bottom: 1px solid #eee;
+  }
+  .header-inner { max-width: 900px; margin: 0 auto; }
+  .header-top {
+    display: flex; justify-content: space-between; align-items: baseline;
+    margin-bottom: 16px;
+  }
+  .header h1 { font-size: 20px; font-weight: 700; color: #202020; letter-spacing: -0.3px; }
+  .header .date { font-size: 13px; color: #999; font-weight: 400; }
+  .tabs { display: flex; gap: 2px; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .tab {
+    padding: 8px 10px; text-align: center;
+    font-size: 12px; font-weight: 500; color: #999;
+    border: none; border-bottom: 2px solid transparent;
+    cursor: pointer; background: none; margin-bottom: -1px; white-space: nowrap;
+    transition: color 0.2s;
+  }
+  .tab:hover { color: #666; }
+  .tab.active { color: #4772fa; border-bottom-color: #4772fa; font-weight: 600; }
+
+  /* ===== Content ===== */
+  .content { flex: 1; padding: 16px 24px 40px; max-width: 900px; margin: 0 auto; width: 100%; }
+  .panel { display: none; }
+  .panel.active { display: block; }
+
+  /* ===== Section Label ===== */
+  .section-label {
+    font-size: 12px; color: #999; font-weight: 600; letter-spacing: 0.3px;
+    margin-bottom: 12px; margin-top: 4px;
+  }
+
+  /* ===== Brain Hero ===== */
+  .brain-hero {
+    background: linear-gradient(135deg, #f0f4ff 0%, #fffbeb 100%);
+    border: 1px solid #d4deff;
+    border-radius: 12px;
+    padding: 24px;
+    margin-bottom: 20px;
+    text-align: center;
+  }
+  .brain-hero-icon { font-size: 48px; margin-bottom: 8px; }
+  .brain-hero h2 { font-size: 18px; font-weight: 700; color: #202020; margin-bottom: 6px; }
+  .brain-hero p { font-size: 13px; color: #666; line-height: 1.7; }
+  .brain-hero .brain-tag {
+    display: inline-block; font-size: 11px; font-weight: 600;
+    background: #4772fa; color: #fff;
+    padding: 2px 10px; border-radius: 10px; margin-top: 10px;
+  }
+
+  /* ===== Tab Card ===== */
+  .tab-card {
+    background: #fff; border: 1px solid #eee; border-radius: 10px;
+    overflow: hidden; margin-bottom: 16px;
+  }
+  .tab-card-header {
+    padding: 16px 20px;
+    border-bottom: 1px solid #f0f0f0;
+    display: flex; align-items: center; gap: 14px;
+  }
+  .tab-card-icon {
+    width: 44px; height: 44px; border-radius: 12px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 22px; flex-shrink: 0;
+  }
+  .tci-blue { background: #e8eeff; }
+  .tci-green { background: #e8f5e9; }
+  .tci-orange { background: #fef6e0; }
+  .tci-purple { background: #f3e8ff; }
+  .tci-yellow { background: #fef3c7; }
+  .tci-cyan { background: #e0f7fa; }
+  .tci-pink { background: #fce4ec; }
+  .tab-card-header h3 { font-size: 15px; font-weight: 700; color: #202020; }
+  .tab-card-header .brain-role { font-size: 12px; color: #4772fa; font-weight: 600; margin-top: 2px; }
+  .tab-card-body { padding: 20px; }
+  .tab-card-body p { font-size: 13px; color: #555; line-height: 1.8; margin-bottom: 12px; }
+  .tab-card-body p:last-child { margin-bottom: 0; }
+
+  /* ===== Use Case ===== */
+  .use-case {
+    background: #f8f9fc; border: 1px solid #eef0f5; border-radius: 8px;
+    padding: 14px 16px; margin-top: 12px;
+  }
+  .use-case-label {
+    font-size: 10px; font-weight: 700; color: #4772fa;
+    letter-spacing: 0.5px; margin-bottom: 6px;
+  }
+  .use-case p { font-size: 12px; color: #666; line-height: 1.7; margin-bottom: 0; }
+  .use-case .scenario { font-weight: 600; color: #333; }
+
+  /* ===== Mini Preview ===== */
+  .mini-preview {
+    background: #fff; border: 1px solid #eee; border-radius: 8px;
+    padding: 12px 14px; margin-top: 12px;
+    font-family: 'SF Mono', 'Menlo', monospace; font-size: 11px;
+    line-height: 1.8; color: #555;
+  }
+  .mini-preview .h { color: #4772fa; font-weight: 600; }
+  .mini-preview .done { color: #10b981; }
+  .mini-preview .muted { color: #bbb; }
+  .mini-preview .badge-inline {
+    display: inline-block; font-size: 10px; font-weight: 600;
+    background: #4772fa; color: #fff;
+    padding: 0px 5px; border-radius: 6px; font-family: inherit;
+  }
+  .mini-preview .time-inline { color: #f59e0b; font-weight: 600; }
+
+  /* ===== Badge ===== */
+  .badge {
+    font-size: 10px; padding: 1px 8px; border-radius: 10px;
+    white-space: nowrap; font-weight: 500; display: inline-block;
+  }
+  .badge-blue { background: #e8eeff; color: #5570b8; }
+  .badge-green { background: #e8f5e9; color: #388e3c; }
+  .badge-orange { background: #fef6e0; color: #b08800; }
+
+  /* ===== System Architecture ===== */
+  .arch-card {
+    background: #fff; border: 1px solid #eee; border-radius: 10px;
+    overflow: hidden; margin-bottom: 16px;
+  }
+  .arch-header {
+    padding: 14px 20px; border-bottom: 1px solid #f0f0f0;
+    display: flex; align-items: center; gap: 12px;
+  }
+  .arch-icon {
+    width: 36px; height: 36px; border-radius: 10px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 14px; font-weight: 700; flex-shrink: 0;
+  }
+  .ai-gas { background: #fef3c7; color: #b45309; font-family: -apple-system, monospace; }
+  .ai-sheets { background: #e8f5e9; color: #388e3c; }
+  .ai-md { background: #fef6e0; color: #b08800; }
+  .ai-trigger { background: #f3e8ff; color: #7c3aed; }
+  .arch-header h3 { font-size: 14px; font-weight: 600; }
+  .arch-header span { font-size: 11px; color: #999; }
+  .arch-body { padding: 16px 20px; font-size: 13px; color: #555; line-height: 1.7; }
+
+  /* ===== Data Flow ===== */
+  .flow-visual {
+    display: flex; align-items: center; justify-content: center;
+    gap: 8px; padding: 20px 16px; flex-wrap: wrap;
+  }
+  .flow-node {
+    display: flex; flex-direction: column; align-items: center; gap: 4px;
+  }
+  .flow-node-icon {
+    width: 48px; height: 48px; border-radius: 12px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 20px;
+  }
+  .fni-md { background: #fef6e0; }
+  .fni-gas { background: #fef3c7; }
+  .fni-sheets { background: #e8f5e9; }
+  .fni-app { background: #e8eeff; }
+  .flow-node-label { font-size: 10px; color: #666; font-weight: 600; }
+  .flow-arrow { font-size: 16px; color: #ccc; }
+
+  /* ===== Key Point ===== */
+  .key-point {
+    background: #f0f4ff; color: #3d4f7c;
+    border-radius: 8px; border: 1px solid #d4deff;
+    padding: 14px 18px; font-size: 12px; line-height: 1.8;
+    margin-top: 16px;
+  }
+  .key-point strong { color: #4772fa; font-weight: 600; }
+
+  /* ===== Access ===== */
+  .access-row { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; }
+  .access-chip {
+    display: flex; align-items: center; gap: 6px;
+    padding: 6px 14px; background: #fff; border: 1px solid #eee;
+    border-radius: 8px; font-size: 12px; color: #666;
+  }
+  .access-dot { width: 6px; height: 6px; border-radius: 50%; background: #4772fa; flex-shrink: 0; }
+
+  /* ===== Spacer ===== */
+  .spacer { height: 20px; }
+  .spacer-lg { height: 32px; }
+
+  /* ===== Footer ===== */
+  .footer { text-align: center; padding: 24px; font-size: 11px; color: #ccc; }
+
+  /* ===== Responsive ===== */
+  @media (max-width: 600px) {
+    .tab { font-size: 11px; padding: 8px 8px; }
+    .brain-hero { padding: 16px; }
+    .flow-visual { flex-direction: column; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ヘッダー -->
+<div class="header">
+  <div class="header-inner">
+    <div class="header-top">
+      <h1>Todoアプリの仕組み</h1>
+      <span class="date">第二の脳 Guide</span>
+    </div>
+    <div class="tabs">
+      <div class="tab active" onclick="showPanel('overview')">全体像</div>
+      <div class="tab" onclick="showPanel('today')">今日</div>
+      <div class="tab" onclick="showPanel('tasks')">タスク一覧</div>
+      <div class="tab" onclick="showPanel('ideas')">アイデア一覧</div>
+      <div class="tab" onclick="showPanel('achievements')">実績リンク</div>
+      <div class="tab" onclick="showPanel('knowledge')">技術知識</div>
+      <div class="tab" onclick="showPanel('structure')">構成</div>
+      <div class="tab" onclick="showPanel('history')">履歴</div>
+      <div class="tab" onclick="showPanel('system')">裏側</div>
+    </div>
+  </div>
+</div>
+
+<div class="content">
+
+<!-- ===== 全体像パネル ===== -->
+<div id="panel-overview" class="panel active">
+
+  <div class="brain-hero">
+    <div class="brain-hero-icon">🧠</div>
+    <h2>Todoアプリ = あなたの第二の脳</h2>
+    <p>
+      やること、思考、実績、知識、全体像、記憶。<br>
+      頭の中にあるもの全部が、この1つのアプリに入っている。<br>
+      📱 スマホでも 💻 PCでも、いつでも自分の脳内にアクセスできる。
+    </p>
+    <div class="brain-tag">7つのタブ = 7つの脳の機能</div>
+  </div>
+
+  <div class="section-label">脳の機能マップ</div>
+
+  <div class="tab-card">
+    <div class="tab-card-header" onclick="showPanel('today')" style="cursor:pointer">
+      <div class="tab-card-icon tci-blue">📋</div>
+      <div>
+        <h3>今日</h3>
+        <div class="brain-role">脳が今日やること</div>
+      </div>
+    </div>
+    <div class="tab-card-body">
+      <p>今日やるタスクだけが並ぶ。チェックして完了、スワイプで削除。朝開いたら今日の仕事が全部見える。</p>
+    </div>
+  </div>
+
+  <div class="tab-card">
+    <div class="tab-card-header" onclick="showPanel('tasks')" style="cursor:pointer">
+      <div class="tab-card-icon tci-green">📝</div>
+      <div>
+        <h3>タスク一覧</h3>
+        <div class="brain-role">脳が抱えてる全仕事</div>
+      </div>
+    </div>
+    <div class="tab-card-body">
+      <p>全プロジェクトの全タスクが階層構造で並ぶ。ここから「今日やる」を選んで追加する、仕事の全体像。</p>
+    </div>
+  </div>
+
+  <div class="tab-card">
+    <div class="tab-card-header" onclick="showPanel('ideas')" style="cursor:pointer">
+      <div class="tab-card-icon tci-orange">💡</div>
+      <div>
+        <h3>アイデア一覧</h3>
+        <div class="brain-role">脳内の思考・ひらめき</div>
+      </div>
+    </div>
+    <div class="tab-card-body">
+      <p>「こうしたら面白そう！」が全部ここに。実現可能性と所要時間つきで、いつでも見返せる。</p>
+    </div>
+  </div>
+
+  <div class="tab-card">
+    <div class="tab-card-header" onclick="showPanel('achievements')" style="cursor:pointer">
+      <div class="tab-card-icon tci-yellow">🏆</div>
+      <div>
+        <h3>実績リンク</h3>
+        <div class="brain-role">脳が積み上げた成果</div>
+      </div>
+    </div>
+    <div class="tab-card-body">
+      <p>作ったアプリ、公開したページ、全URLがプロジェクト別に並ぶ。「何を作ってきたか」が一目でわかる。</p>
+    </div>
+  </div>
+
+  <div class="tab-card">
+    <div class="tab-card-header" onclick="showPanel('knowledge')" style="cursor:pointer">
+      <div class="tab-card-icon tci-cyan">📚</div>
+      <div>
+        <h3>技術知識</h3>
+        <div class="brain-role">脳に蓄積された知識</div>
+      </div>
+    </div>
+    <div class="tab-card-body">
+      <p>Web開発、JavaScript、Python、DB…学んだ技術メモが分類されて入っている。忘れても見返せば思い出せる。</p>
+    </div>
+  </div>
+
+  <div class="tab-card">
+    <div class="tab-card-header" onclick="showPanel('structure')" style="cursor:pointer">
+      <div class="tab-card-icon tci-purple">🗂</div>
+      <div>
+        <h3>構成</h3>
+        <div class="brain-role">脳の構造・全体マップ</div>
+      </div>
+    </div>
+    <div class="tab-card-body">
+      <p>Googleドライブのフォルダツリーを5階層まで表示。自分の仕事の全体構造を俯瞰できる。</p>
+    </div>
+  </div>
+
+  <div class="tab-card">
+    <div class="tab-card-header" onclick="showPanel('history')" style="cursor:pointer">
+      <div class="tab-card-icon tci-pink">📖</div>
+      <div>
+        <h3>履歴</h3>
+        <div class="brain-role">脳の記憶・過去ログ</div>
+      </div>
+    </div>
+    <div class="tab-card-body">
+      <p>過去に完了したタスクが日付別に全部残っている。「先月何やったっけ？」に即答できる。</p>
+    </div>
+  </div>
+
+  <div class="key-point">
+    全部 <strong>Googleマイドライブの中</strong> で動いている。課金ゼロ。
+    スマホはホーム画面アイコン1タップ、PCは <strong>Windows / Mac どちらでもOK</strong>。
+    スプシをコピーすれば <strong>誰でも同じ仕組みが無料</strong> で使える。
+  </div>
+</div>
+
+<!-- ===== 今日パネル ===== -->
+<div id="panel-today" class="panel">
+  <div class="tab-card">
+    <div class="tab-card-header">
+      <div class="tab-card-icon tci-blue">📋</div>
+      <div>
+        <h3>今日 — 脳が今日やること</h3>
+        <div class="brain-role">毎朝ここを開くだけで1日が始まる</div>
+      </div>
+    </div>
+    <div class="tab-card-body">
+      <p>今日やるタスクだけが表示される、メイン画面。毎日0時に自動リセットされるから、朝開いた時にはもう準備ができている。</p>
+      <p>チェックで完了、スワイプで削除、ドラッグで並べ替え。担当も切り替えられる（自分 / Cowork / ClaudeCode等）。完了したタスクは取り消し線で残り、0時に履歴へ自動移動。</p>
+
+      <div class="mini-preview">
+        <span class="h">今日のタスク</span> &nbsp; 3/21完了<br><br>
+        ☐ タスク提出 &nbsp;<span class="badge badge-orange">Cowork</span><br>
+        ☐ 売掛金 — 入金確認 &nbsp;<span class="badge badge-blue">自分</span><br>
+        <span class="done">☑ アイデア一覧のUI改善</span> &nbsp;<span class="badge badge-green">完了</span><br>
+        ☐ KNOWLEDGE.md整理 &nbsp;<span class="badge badge-blue">自分</span>
+      </div>
+
+      <div class="use-case">
+        <div class="use-case-label">使い方</div>
+        <p>
+          <span class="scenario">📱 朝:</span> ホーム画面アイコンをタップ → 今日やることを確認 → 上から順にこなす<br>
+          <span class="scenario">📱 日中:</span> 完了したらチェック → 進捗バーが伸びる。スワイプで削除もOK<br>
+          <span class="scenario">💻 日中:</span> PCブラウザからも同じ画面。ドラッグで並べ替え・担当変更も快適<br>
+          <span class="scenario">🔄 夜:</span> 何もしなくてOK → 0時に自動リセット（PC・スマホ共通）
+        </p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== タスク一覧パネル ===== -->
+<div id="panel-tasks" class="panel">
+  <div class="tab-card">
+    <div class="tab-card-header">
+      <div class="tab-card-icon tci-green">📝</div>
+      <div>
+        <h3>タスク一覧 — 脳が抱えてる全仕事</h3>
+        <div class="brain-role">TASKS.mdと自動同期</div>
+      </div>
+    </div>
+    <div class="tab-card-body">
+      <p>全プロジェクトの全タスクが、カテゴリごとに折りたたまれて並ぶ。親カテゴリも子タスクもチェック・削除・ドラッグ全対応。ここが仕事の「全体地図」。</p>
+      <p>タスクを選んで「今日に追加」を押せば、今日タブに入る。カテゴリ単位で「全て今日に追加」もできる。</p>
+
+      <div class="mini-preview">
+        <span class="h">▼ Todoアプリ</span> &nbsp;<span class="muted">5件</span><br>
+        &nbsp;&nbsp;☐ GAS＋Gemini試作 &nbsp;[今日に追加]<br>
+        &nbsp;&nbsp;☐ テンプレート化<br>
+        <span class="h">▼ Addness管理</span> &nbsp;<span class="muted">8件</span><br>
+        &nbsp;&nbsp;☐ 沈静化ロジック<br>
+        &nbsp;&nbsp;☐ 部署Webhook設定
+      </div>
+
+      <div class="use-case">
+        <div class="use-case-label">使い方</div>
+        <p>
+          <span class="scenario">💻 タスク追加:</span> PCからCoworkに「TASKS.mdにこれ追加して」→ 次回起動時に自動反映<br>
+          <span class="scenario">📱 今日に追加:</span> タスク横の「今日に追加」ボタンをタップ → 今日タブに移動<br>
+          <span class="scenario">💻 今日に追加:</span> 同じ操作をPCブラウザからもOK。カテゴリ「全て今日に追加」で一括追加<br>
+          <span class="scenario">📱💻 並べ替え:</span> ドラッグで順番変更（PC・スマホどちらも対応）
+        </p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== アイデア一覧パネル ===== -->
+<div id="panel-ideas" class="panel">
+  <div class="tab-card">
+    <div class="tab-card-header">
+      <div class="tab-card-icon tci-orange">💡</div>
+      <div>
+        <h3>アイデア一覧 — 脳内の思考・ひらめき</h3>
+        <div class="brain-role">IDEAS.mdと自動同期</div>
+      </div>
+    </div>
+    <div class="tab-card-body">
+      <p>「こうしたらすごい！面白い！」というアイデアが全部ここに。キャッチーなフック + タイトルで目を引く表示、サブタイトルに実現可能性と所要時間のバッジ付き。</p>
+      <p>ただの作業（○○を修正する等）はここには入らない。IDEAS.mdには「アイデア」だけ。ワクワクするものだけ。</p>
+
+      <div class="mini-preview">
+        <strong>課金トークン未使用で自動化を実現させたい！GAS×Gemini無料枠だけで自動化</strong><br>
+        <span class="muted">課金ゼロで日常業務を自走させる —</span> <span class="badge-inline">80%</span> <span class="time-inline">3-5h</span><br><br>
+        <strong>常に考えなくても忘れても継続できる仕組みへ！Todoアプリを「第二の脳」へ進化</strong><br>
+        <span class="muted">DB移行+スプシ脱却で爆速化 —</span> <span class="badge-inline">80%</span> <span class="time-inline">15-20h</span>
+      </div>
+
+      <div class="use-case">
+        <div class="use-case-label">使い方</div>
+        <p>
+          <span class="scenario">💻 ひらめいた時:</span> PCからCoworkに「IDEAS.mdにこれ追加して」→ 自動反映<br>
+          <span class="scenario">📱 見返す時:</span> スマホでアイデアタブを開いて、実現可能性と所要時間でどれからやるか判断<br>
+          <span class="scenario">💻 見返す時:</span> PCブラウザでも同じ画面で確認OK<br>
+          <span class="scenario">💻 実現した時:</span> Coworkに頼んで実現ログセクションに移動。成果が記録される
+        </p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== 実績リンクパネル ===== -->
+<div id="panel-achievements" class="panel">
+  <div class="tab-card">
+    <div class="tab-card-header">
+      <div class="tab-card-icon tci-yellow">🏆</div>
+      <div>
+        <h3>実績リンク — 脳が積み上げた成果</h3>
+        <div class="brain-role">KNOWLEDGE.mdの実績・リンクセクションと自動同期</div>
+      </div>
+    </div>
+    <div class="tab-card-body">
+      <p>自分が作ってきたもの全てがプロジェクト別にURLつきで並ぶ。Web App、GASエディタ、スプレッドシート、図解ガイド…ワンタップで開ける。</p>
+      <p>「あれどこだっけ？」がなくなる。全成果物への入口がここに集約されている。</p>
+
+      <div class="mini-preview">
+        <span class="h">▼ Todoアプリ</span> &nbsp;<span class="muted">4件</span><br>
+        &nbsp;&nbsp;Web App &nbsp;<span style="color:#4772fa">開く ↗</span><br>
+        &nbsp;&nbsp;GASエディタ &nbsp;<span style="color:#4772fa">開く ↗</span><br>
+        &nbsp;&nbsp;スプレッドシート &nbsp;<span style="color:#4772fa">開く ↗</span><br>
+        &nbsp;&nbsp;図解ガイド &nbsp;<span style="color:#4772fa">開く ↗</span><br><br>
+        <span class="h">▼ お問合せ管理</span> &nbsp;<span class="muted">2件</span><br>
+        &nbsp;&nbsp;Vercelダッシュボード &nbsp;<span style="color:#4772fa">開く ↗</span>
+      </div>
+
+      <div class="use-case">
+        <div class="use-case-label">使い方</div>
+        <p>
+          <span class="scenario">📱 アプリを開きたい時:</span> 実績リンクタブ → プロジェクト選択 → 「開く」タップでブラウザへ<br>
+          <span class="scenario">💻 アプリを開きたい時:</span> 同じ操作をPCブラウザから。URLがそのまま新タブで開く<br>
+          <span class="scenario">📱💻 成果を振り返る時:</span> 自分の全実績を一覧で確認。ポートフォリオ的にも使える
+        </p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== 技術知識パネル ===== -->
+<div id="panel-knowledge" class="panel">
+  <div class="tab-card">
+    <div class="tab-card-header">
+      <div class="tab-card-icon tci-cyan">📚</div>
+      <div>
+        <h3>技術知識 — 脳に蓄積された知識</h3>
+        <div class="brain-role">KNOWLEDGE.mdの知識セクションと自動同期</div>
+      </div>
+    </div>
+    <div class="tab-card-body">
+      <p>Web開発の基礎、JavaScript系、Python系、データベース、デプロイ…学んだことが分類されて全部ここに。用語の読み方（カタカナ）付きで、忘れてもすぐ思い出せる。</p>
+      <p>新しい技術を学ぶたびにKNOWLEDGE.mdに追記 → 自動でこのタブに反映。成長の記録でもある。</p>
+
+      <div class="mini-preview">
+        <span class="h">▼ Web開発の基礎</span> &nbsp;<span class="muted">4件</span><br>
+        &nbsp;&nbsp;HTML（エイチティーエムエル）: ページの構造<br>
+        &nbsp;&nbsp;CSS（シーエスエス）: 見た目<br>
+        &nbsp;&nbsp;JavaScript（ジャバスクリプト）: 動き・処理<br><br>
+        <span class="h">▼ JavaScript系の技術スタック</span> &nbsp;<span class="muted">6件</span><br>
+        &nbsp;&nbsp;React（リアクト/Meta製）…
+      </div>
+
+      <div class="use-case">
+        <div class="use-case-label">使い方</div>
+        <p>
+          <span class="scenario">📱 「あれなんだっけ？」:</span> スマホで技術知識タブを開いてサッと確認。読み方付きで人に説明もできる<br>
+          <span class="scenario">💻 「あれなんだっけ？」:</span> PCブラウザでも同じ内容を確認OK<br>
+          <span class="scenario">💻 新しく学んだ時:</span> CoworkにKNOWLEDGE.mdへ追記を依頼 → 次回起動時に自動反映
+        </p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== 構成パネル ===== -->
+<div id="panel-structure" class="panel">
+  <div class="tab-card">
+    <div class="tab-card-header">
+      <div class="tab-card-icon tci-purple">🗂</div>
+      <div>
+        <h3>構成 — 脳の構造・全体マップ</h3>
+        <div class="brain-role">Googleドライブのフォルダツリー</div>
+      </div>
+    </div>
+    <div class="tab-card-body">
+      <p>Googleドライブの「仕事用」フォルダを起点に、5階層までのフォルダ・ファイルをツリー表示。ファイルタイプごとにアイコン付き。</p>
+      <p>「自分の仕事の全体構造ってどうなってたっけ？」がこれ1つで俯瞰できる。フォルダの開閉もできる。</p>
+
+      <div class="mini-preview">
+        <span class="h">📁 仕事用/</span><br>
+        &nbsp;&nbsp;📄 CONTEXT.md<br>
+        &nbsp;&nbsp;📄 IDEAS.md<br>
+        &nbsp;&nbsp;📄 TASKS.md<br>
+        &nbsp;&nbsp;<span class="h">📁 Todoプロジェクト/</span><br>
+        &nbsp;&nbsp;&nbsp;&nbsp;📁 Todoダッシュボード構築/<br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;📁 gas/<br>
+        &nbsp;&nbsp;<span class="h">📁 Addness管理/</span><br>
+        &nbsp;&nbsp;<span class="h">📁 ポートフォリオ/</span>
+      </div>
+
+      <div class="use-case">
+        <div class="use-case-label">使い方</div>
+        <p>
+          <span class="scenario">📱 全体把握:</span> スマホでフォルダ構成をサッと確認。フォルダの開閉もタップでOK<br>
+          <span class="scenario">💻 全体把握:</span> PC画面の方が広いから全体を俯瞰しやすい。プロジェクト間の関係が見える<br>
+          <span class="scenario">📱💻 ファイル探し:</span> ツリーを辿って目的のファイルを見つける
+        </p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== 履歴パネル ===== -->
+<div id="panel-history" class="panel">
+  <div class="tab-card">
+    <div class="tab-card-header">
+      <div class="tab-card-icon tci-pink">📖</div>
+      <div>
+        <h3>履歴 — 脳の記憶・過去ログ</h3>
+        <div class="brain-role">完了タスクが自動で蓄積される</div>
+      </div>
+    </div>
+    <div class="tab-card-body">
+      <p>完了したタスクが日付別に全部記録されている。期間フィルタ（7日 / 30日 / 全件）で絞り込み可能。</p>
+      <p>「先月何やったっけ？」「あのタスクいつ終わった？」に即答できる。自分の活動履歴がそのまま残る。</p>
+
+      <div class="mini-preview">
+        <span class="h">── 2026-03-13 ──</span><br>
+        <span class="done">✅</span> アイデア一覧のUI改善 &nbsp;<span class="badge badge-blue">自分</span><br>
+        <span class="done">✅</span> KNOWLEDGE.md整理 &nbsp;<span class="badge badge-blue">自分</span><br>
+        <span class="done">✅</span> タスク提出 &nbsp;<span class="badge badge-orange">Cowork</span><br><br>
+        <span class="h">── 2026-03-12 ──</span><br>
+        <span class="done">✅</span> 図解ガイド公開 &nbsp;<span class="badge badge-blue">自分</span>
+      </div>
+
+      <div class="use-case">
+        <div class="use-case-label">使い方</div>
+        <p>
+          <span class="scenario">📱 振り返り:</span> スマホで履歴タブを開く → 期間選択 → 何をどれだけやったか一目でわかる<br>
+          <span class="scenario">💻 振り返り:</span> PC画面で一覧表示。長い履歴もスクロールで快適に確認<br>
+          <span class="scenario">💻 報告:</span> 上司に「今月やったこと」を聞かれたら、PCで履歴タブを見せるだけ
+        </p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== 裏側パネル ===== -->
+<div id="panel-system" class="panel">
+
+  <div class="section-label">アクセス方法</div>
+  <div class="access-row">
+    <div class="access-chip"><span class="access-dot"></span>スマホ — ホーム画面アイコン1タップ</div>
+    <div class="access-chip"><span class="access-dot"></span>PC — Windows / Mac どちらもOK</div>
+    <div class="access-chip"><span class="access-dot"></span>マイドライブから直接</div>
+  </div>
+
+  <div class="section-label">データの流れ</div>
+  <div class="tab-card">
+    <div class="flow-visual">
+      <div class="flow-node">
+        <div class="flow-node-icon fni-md">📄</div>
+        <div class="flow-node-label">mdファイル群</div>
+      </div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-node">
+        <div class="flow-node-icon fni-gas">⚙️</div>
+        <div class="flow-node-label">GAS（司令官）</div>
+      </div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-node">
+        <div class="flow-node-icon fni-sheets">📊</div>
+        <div class="flow-node-label">スプレッドシート</div>
+      </div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-node">
+        <div class="flow-node-icon fni-app">🌐</div>
+        <div class="flow-node-label">Web App（画面）</div>
+      </div>
+    </div>
+    <div style="padding:0 20px 16px; font-size:12px; color:#666; line-height:1.7; text-align:center;">
+      Coworkがmdファイルを編集 → GASが読み込み → スプシに同期 → アプリに表示。<br>
+      <strong style="color:#4772fa">どこから編集しても全部つながる。</strong>
+    </div>
+  </div>
+
+  <div class="spacer"></div>
+  <div class="section-label">システム構成</div>
+
+  <div class="arch-card">
+    <div class="arch-header">
+      <div class="arch-icon ai-gas">GAS</div>
+      <div><h3>Google Apps Script</h3><span>司令官 — 全操作を処理し、各部屋へ指示を出す頭脳</span></div>
+    </div>
+    <div class="arch-body">
+      あなたの操作を受け取って処理。mdファイルの読み込み、スプシへの書き込み、画面の構築、0時の自動リセット…全部この司令官が指示を出している。
+    </div>
+  </div>
+
+  <div class="arch-card">
+    <div class="arch-header">
+      <div class="arch-icon ai-sheets">📊</div>
+      <div><h3>スプレッドシート</h3><span>記録庫 — 4シートで全データを保管</span></div>
+    </div>
+    <div class="arch-body">
+      master（全タスク）、today（今日のタスク）、history（完了履歴）、config（設定値）の4シート構成。アプリの裏側でデータを持っている場所。
+    </div>
+  </div>
+
+  <div class="arch-card">
+    <div class="arch-header">
+      <div class="arch-icon ai-md">📄</div>
+      <div><h3>mdファイル群</h3><span>作戦ノート — Coworkやエディタから直接編集OK</span></div>
+    </div>
+    <div class="arch-body">
+      TASKS.md（タスク一覧）、IDEAS.md（アイデア・構想）、KNOWLEDGE.md（技術知識・実績リンク）の3ファイル。テキストだからCoworkに「これ追加して」と言うだけで編集できる。
+    </div>
+  </div>
+
+  <div class="arch-card">
+    <div class="arch-header">
+      <div class="arch-icon ai-trigger">⏰</div>
+      <div><h3>トリガー</h3><span>自動スケジュール — 毎日0時に自動実行</span></div>
+    </div>
+    <div class="arch-body">
+      完了タスクを履歴へ移動、未完了は翌日に引き継ぎ、繰り返しタスクは未着手に戻す。人が何もしなくても毎朝リセットされる。
+    </div>
+  </div>
+
+  <div class="key-point">
+    全部 <strong>Googleマイドライブの中</strong> で動いている。課金ゼロ。
+    スプシをコピーすれば <strong>誰でも同じ仕組みが無料</strong> で使える。
+  </div>
+
+</div>
+
+</div>
+
+<div class="footer">Todoアプリ — 第二の脳（7タブ構成・2026-03-13更新）</div>
+
+<script>
+function showPanel(name) {
+  document.querySelectorAll('.panel').forEach(function(p) { p.classList.remove('active'); });
+  document.querySelectorAll('.tab').forEach(function(t) { t.classList.remove('active'); });
+  document.getElementById('panel-' + name).classList.add('active');
+  var tabs = document.querySelectorAll('.tab');
+  var names = ['overview','today','tasks','ideas','achievements','knowledge','structure','history','system'];
+  var idx = names.indexOf(name);
+  if (idx >= 0 && tabs[idx]) tabs[idx].classList.add('active');
+  window.scrollTo(0, 0);
+}
+</script>
+
+</body>
+</html>
